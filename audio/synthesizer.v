@@ -24,7 +24,20 @@ module synthesizer(
  *                           Parameter Declarations                          *
  *****************************************************************************/
 
-
+parameter [31:0]
+	C = 32'd191110,
+	Cs = 32'd180388,
+	D = 32'd170265,
+	Ds = 32'd160705,
+	E = 32'd151685,
+	F = 32'd143172,
+	Fs = 32'd135139,
+	G = 32'd127551,
+	Gs = 32'd120395,
+	A = 32'd113636,
+	As = 32'd107259,
+	B = 32'd101239;
+ 
 /*****************************************************************************
  *                             Port Declarations                             *
  *****************************************************************************/
@@ -44,9 +57,9 @@ inout 		FPGA_I2C_SDAT;
 
 // Outputs
 output		AUD_XCK;
-output		AUD_DACDAT,
+output		AUD_DACDAT;
 
-output		FPGA_I2C_SCLK
+output		FPGA_I2C_SCLK;
 
 /*****************************************************************************
  *                 Internal Wires and Registers Declarations                 *
@@ -58,33 +71,69 @@ wire				audio_out_allowed;
 wire	[31:0]	audio_out; // Only one channel, no L/R
 wire				write_audio_out;
 
-wire	[18:0]	period;
+wire	[31:0]	ch1_out;
+wire	[31:0]	ch2_out;
 
 // Registers
-reg	[18:0]	frequency_divider;
-reg				wave_side;
+reg	[31:0]	second_timer;
+reg	[3:0]		note_index;
+reg	[31:0]	note;
 
 /*****************************************************************************
  *                             Sequential Logic                              *
  *****************************************************************************/
- 
-always @(posedge CLOCK_50)
-	if(frequency_divider == period) begin
-		frequency_divider <= 0;
-		wave_side <= !wave_side;
-	end else frequency_divider <= frequency_divider + 1;
+
+always @(posedge CLOCK_50) begin
+	if(second_timer == 25000000) begin
+		second_timer <= 0;
+		if (note_index == 11) note_index <= 0;
+		else note_index <= note_index + 1;
+	end else second_timer <= second_timer + 1;
+end
+
+always @(note_index) begin
+	case(note_index)
+		0: note <= C;
+		1: note <= Cs;
+		2: note <= D;
+		3: note <= Ds;
+		4: note <= E;
+		5: note <= F;
+		6: note <= Fs;
+		7: note <= G;
+		8: note <= Gs;
+		9: note <= A;
+		10: note <= As;
+		11: note <= B;
+	endcase
+end
 
 /*****************************************************************************
  *                            Combinational Logic                            *
  *****************************************************************************/
- 
-assign period				= {SW[3:0], 15'd3000};
-assign audio_out			= wave_side ? 32'd10000000 : -32'd10000000;
+
+assign audio_out 			= ch1_out;
 assign write_audio_out	= audio_out_allowed;
 
 /*****************************************************************************
  *                              Internal Modules                             *
  *****************************************************************************/
+
+tone_generator channel_1 (
+	.CLOCK_50	(CLOCK_50),
+	.enable		(SW[9]),
+	.shape		(2'b01),
+	.period		(note),
+	.audio_out	(ch1_out)
+);
+
+tone_generator channel_2 (
+	.CLOCK_50	(CLOCK_50),
+	.enable		(SW[8]),
+	.shape		(2'b10),
+	.period		({SW[7:4], 15'd3000}),
+	.audio_out	(ch2_out)
+);
 
 Audio_Controller Audio_Controller (
 	// Inputs
